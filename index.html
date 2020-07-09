@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta name="description" content="">
+		<meta name="author" content="">
+
+		<title>Texas Motor Speedway Logo</title>
+
+		<link href="info/info.css" rel="stylesheet">
+
+		<style type="text/css">
+			html { overflow: hidden; }
+			body { margin: 0; padding: 0; overflow: hidden; font-family: Arial, sans-serif; font-size: 13px; line-height: 20px; color: #333; }
+
+			a { color: #fc0; text-decoration: none; }
+			/*a:hover, a:focus { color: #005580; text-decoration: underline; }*/
+		</style>
+
+	</head>
+
+	<body>
+
+		<div id="container"></div>
+
+		<script src="third-party/71/three.min.js"></script>
+		<script src="third-party/OrbitControls.js"></script>
+		<script src="third-party/Detector.js"></script>
+		<script src="third-party/tween.min.js"></script>
+
+		<!-- Sparks -->
+		<!-- <script src="third-party/threex.sparks.js"></script> -->
+		<script src="third-party/Sparks.js"></script>
+
+		<!-- Fireworks -->
+
+		<!-- Shaders / Postprocessing / Dotscreen -->
+		<!-- <script src="third-party/shaders/CopyShader.js"></script>
+		<script src="third-party/shaders/DotScreenShader.js"></script>
+		<script src="third-party/shaders/SepiaShader.js"></script>
+
+		<script src="third-party/postprocessing/EffectComposer.js"></script>
+		<script src="third-party/postprocessing/RenderPass.js"></script>
+		<script src="third-party/postprocessing/MaskPass.js"></script>
+		<script src="third-party/postprocessing/ShaderPass.js"></script>
+		<script src="third-party/postprocessing/DotScreenPass.js"></script> -->
+
+		<script src="info/info.js"></script>
+
+
+		<script type="x-shader/x-vertex" id="vertexshader">
+
+			attribute float size;
+			attribute vec3 pcolor;
+
+			varying vec3 vColor;
+
+			void main() {
+
+				vColor = pcolor;
+
+				vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+
+				gl_PointSize = size * ( 200.0 / length( mvPosition.xyz ) );
+
+				gl_Position = projectionMatrix * mvPosition;
+
+			}
+
+		</script>
+
+		<script type="x-shader/x-fragment" id="fragmentshader">
+
+			uniform sampler2D texture;
+
+			varying vec3 vColor;
+
+			void main() {
+
+				vec4 outColor = texture2D( texture, gl_PointCoord );
+
+				gl_FragColor = outColor * vec4( vColor, 1.0 );
+
+			}
+
+		</script>
+
+
+
+		<script>
+
+			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+			var info = new Info(
+				'TMS Logo Skull',
+				[
+					'<a href="https://davidlyons.dev">David Lyons</a>, 2015',
+					'Reference: <a href="logo.jpg">Texas Motor Speedway Logo</a>',
+					'Tools: ZBrush, <a href="http://threejs.org">three.js</a>, <a href="https://github.com/zz85/sparks.js/">sparks.js</a>'
+				].join('<br>')
+			);
+
+			var container;
+
+			var camera, controls, scene, renderer
+			// var composer;
+
+			var helper, mesh;
+
+			var mouse = new THREE.Vector2();
+
+			var FLOOR = -100;
+
+			var threexSparks;
+
+			var delta = 1, clock = new THREE.Clock();
+			var heartShape, circleShape, particleCloud, sparksEmitter, emitterPos, pointOnShape;
+			var _rotation = 0;
+			var timeOnShapePath = 0;
+			var speed = 50;
+			var pointLight;
+
+			init();
+			animate();
+
+			function init() {
+
+				container = document.getElementById( 'container' );
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setClearColor( 0x555555, 1 );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000 );
+				camera.position.z = 400;
+
+				controls = new THREE.OrbitControls( camera, renderer.domElement );
+
+				scene = new THREE.Scene();
+
+				// Ambient light
+				var light = new THREE.AmbientLight( 0x404040 ); // soft white light
+				scene.add( light );
+
+				var dLight = new THREE.DirectionalLight( 0xffffff, 0.4 );
+				dLight.position.set( 1, 1, 1 );
+				scene.add( dLight );
+
+				var dLight2 = new THREE.DirectionalLight( 0xffffff, 0.3 );
+				dLight2.position.set( -1, 0, 0 );
+				scene.add( dLight2 );
+
+				var dLight3 = new THREE.DirectionalLight( 0xffffff, 0.2 );
+				dLight3.position.set( 0, 1, -1 );
+				scene.add( dLight3 );
+
+				// Ground
+				// helper = new THREE.GridHelper( 200, 40 );
+				// helper.setColors( 0x000000, 0x808080 );
+				// helper.position.y = FLOOR;
+				// scene.add( helper );
+
+				var colorMap = THREE.ImageUtils.loadTexture( "models/skull-color.jpg" );
+				var normalMap = THREE.ImageUtils.loadTexture( "models/skull-normal.jpg" );
+
+				var material = new THREE.MeshPhongMaterial({
+					ambient: 0x777777,
+					color: 0xdddddd,
+					specular: 0xffffff,
+					shininess: 6,
+					shading: THREE.SmoothShading,
+					map: colorMap,
+					normalMap: normalMap,
+					morphTargets: true
+				});
+
+				// var material = new THREE.MeshBasicMaterial({
+				// 	ambient: 0x777777,
+				// 	color: 0xffffff,
+				// 	map: colorMap,
+				// 	morphTargets: true
+				// });
+
+				var loader = new THREE.JSONLoader( true );
+				document.body.appendChild( loader.statusDomElement );
+
+				loader.load( "models/skull-morph.js", function ( geometry, materials ) {
+					mesh = new THREE.Mesh( geometry, material );
+					mesh.position.set( 0, 30, -50 ); // -50 in z to set slightly behind sparks
+					mesh.scale.set( 200, 200, 200 );
+					mesh.rotation.x = 0.1;
+					mesh.rotation.y = 0.2;
+					scene.add( mesh );
+
+					loader.statusDomElement.style.display = "none";
+
+					setupTween();
+				});
+
+
+
+				// ---------------------------------------------------------------
+
+				// Fire - Sparks.js
+				// http://bit.ly/1OebgBZ
+
+				// threexSparks  = new THREEx.Sparks({
+				//   maxParticles  : 400,
+				//   counter   : new SPARKS.SteadyCounter(300)
+				// });
+
+				// var emitter = threexSparks.emitter();
+
+				// var initColorSize = function(){
+				//   this.initialize = function( emitter, particle ){
+				//     particle.target.color().setHSV(0.3, 0.9, 0.4);
+				//     particle.target.size(150);
+				//   };
+				// };
+
+
+				// emitter.addInitializer(new initColorSize());
+				// emitter.addInitializer(new SPARKS.Position( new SPARKS.PointZone( new THREE.Vector3(0,0,0) ) ) );
+				// emitter.addInitializer(new SPARKS.Lifetime(0,0.8));
+				// emitter.addInitializer(new SPARKS.Velocity(new SPARKS.PointZone(new THREE.Vector3(0,250,00))));
+
+				// emitter.addAction(new SPARKS.Age());
+				// emitter.addAction(new SPARKS.Move());
+				// emitter.addAction(new SPARKS.RandomDrift(1000,0,1000));
+				// emitter.addAction(new SPARKS.Accelerate(0,-200,0));
+
+
+
+
+
+
+
+
+												// from http://threejs.org/examples/webgl_particles_shapes
+
+												pointLight = new THREE.PointLight( 0xffffff, 2, 300 );
+												pointLight.position.set( 0, 0, 0 );
+												scene.add( pointLight );
+
+												// Create particle objects for Three.js
+
+												group = new THREE.Group();
+												scene.add( group );
+
+												var particlesLength = 70000;
+
+												var particles = new THREE.Geometry();
+
+												function newpos( x, y, z ) {
+
+													return new THREE.Vector3( x, y, z );
+
+												}
+
+
+												var Pool = {
+
+													__pools: [],
+
+													// Get a new Vector
+
+													get: function() {
+
+														if ( this.__pools.length > 0 ) {
+
+															return this.__pools.pop();
+
+														}
+
+														console.log( "pool ran out!" )
+														return null;
+
+													},
+
+													// Release a vector back into the pool
+
+													add: function( v ) {
+
+														this.__pools.push( v );
+
+													}
+
+												};
+
+
+												for ( i = 0; i < particlesLength; i ++ ) {
+
+													particles.vertices.push( newpos( Math.random() * 200 - 100, Math.random() * 100 + 150, Math.random() * 50 ) );
+													Pool.add( i );
+
+												}
+
+
+												// Create pools of vectors
+
+												attributes = {
+
+													size:  { type: 'f', value: [] },
+													pcolor: { type: 'c', value: [] }
+
+												};
+
+												var sprite = generateSprite() ;
+
+												texture = new THREE.Texture( sprite );
+												texture.needsUpdate = true;
+
+												uniforms = {
+
+													texture:   { type: "t", value: texture }
+
+												};
+
+												// PARAMETERS
+
+												// Steadycounter
+												// Life
+												// Opacity
+												// Hue Speed
+												// Movement Speed
+
+												function generateSprite() {
+
+													var canvas = document.createElement( 'canvas' );
+													canvas.width = 128;
+													canvas.height = 128;
+
+													var context = canvas.getContext( '2d' );
+
+
+													// Just a square, doesnt work too bad with blur pp.
+													// context.fillStyle = "white";
+													// context.strokeStyle = "white";
+													// context.fillRect(0, 0, 63, 63) ;
+
+													// Heart Shapes are not too pretty here
+													// var x = 4, y = 0;
+													// context.save();
+													// context.scale(8, 8); // Scale so canvas render can redraw within bounds
+													// context.beginPath();
+													// context.bezierCurveTo( x + 2.5, y + 2.5, x + 2.0, y, x, y );
+													// context.bezierCurveTo( x - 3.0, y, x - 3.0, y + 3.5,x - 3.0,y + 3.5 );
+													// context.bezierCurveTo( x - 3.0, y + 5.5, x - 1.0, y + 7.7, x + 2.5, y + 9.5 );
+													// context.bezierCurveTo( x + 6.0, y + 7.7, x + 8.0, y + 5.5, x + 8.0, y + 3.5 );
+													// context.bezierCurveTo( x + 8.0, y + 3.5, x + 8.0, y, x + 5.0, y );
+													// context.bezierCurveTo( x + 3.5, y, x + 2.5, y + 2.5, x + 2.5, y + 2.5 );
+
+													context.beginPath();
+													context.arc( 64, 64, 60, 0, Math.PI * 2, false) ;
+
+													context.lineWidth = 0.5; //0.05
+													context.stroke();
+													context.restore();
+
+													var gradient = context.createRadialGradient( canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width / 2 );
+
+													gradient.addColorStop( 0, 'rgba(255,255,255,1)' );
+													gradient.addColorStop( 0.2, 'rgba(255,255,255,1)' );
+													gradient.addColorStop( 0.4, 'rgba(200,200,200,1)' );
+													gradient.addColorStop( 1, 'rgba(0,0,0,1)' );
+
+													context.fillStyle = gradient;
+
+													context.fill();
+
+													return canvas;
+
+												}
+
+
+												var shaderMaterial = new THREE.ShaderMaterial( {
+
+													uniforms: uniforms,
+													attributes: attributes,
+
+													vertexShader: document.getElementById( 'vertexshader' ).textContent,
+													fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
+
+													blending: THREE.AdditiveBlending,
+													depthWrite: false,
+													transparent: true
+
+												});
+
+												particleCloud = new THREE.PointCloud( particles, shaderMaterial );
+
+												var vertices = particleCloud.geometry.vertices;
+												var values_size = attributes.size.value;
+												var values_color = attributes.pcolor.value;
+
+												for( var v = 0; v < vertices.length; v ++ ) {
+
+													values_size[ v ] = 50;
+
+													values_color[ v ] = new THREE.Color( 0x000000 );
+
+													particles.vertices[ v ].set( Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY );
+
+												}
+
+												group.add( particleCloud );
+												particleCloud.y = 800;
+
+
+												// Create Particle Systems
+
+												// EMITTER STUFF
+
+												// Heart
+
+												// heartShape = new THREE.Shape();
+												// var x = 0, y = 0;
+												// heartShape.moveTo( x + 25, y + 25 );
+												// heartShape.bezierCurveTo( x + 25, y + 25, x + 20, y, x, y );
+												// heartShape.bezierCurveTo( x - 30, y, x - 30, y + 35,x - 30,y + 35 );
+												// heartShape.bezierCurveTo( x - 30, y + 55, x - 10, y + 77, x + 25, y + 95 );
+												// heartShape.bezierCurveTo( x + 60, y + 77, x + 80, y + 55, x + 80, y + 35 );
+												// heartShape.bezierCurveTo( x + 80, y + 35, x + 80, y, x + 50, y );
+												// heartShape.bezierCurveTo( x + 35, y, x + 25, y + 25, x + 25, y + 25 );
+
+												// Circle
+
+												circleShape = new THREE.Shape();
+												var r = 40; // circle radius
+												var x = 20, y = 70; // offset
+												circleShape.moveTo( 0+x, r+y );
+												circleShape.quadraticCurveTo( r+x, r+y, r+x, 0+y );
+												circleShape.quadraticCurveTo( r+x, -r+y, 0+x, -r+y );
+												circleShape.quadraticCurveTo( -r+x, -r+y, -r+x, 0+y );
+												circleShape.quadraticCurveTo( -r+x, r+y, 0+x, r+y );
+
+												// var points = circleShape.createPointsGeometry();
+												// var line = new THREE.Line( points, new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 3 } ) );
+												// line.position.set( 0, 0, 200 );
+												// scene.add( line );
+
+
+												var hue = 0.07;
+
+												var setTargetParticle = function() {
+
+													var target = Pool.get();
+													values_size[ target ] = Math.random() * 200 + 100;
+
+													return target;
+
+												};
+
+												var onParticleCreated = function( p ) {
+
+													var position = p.position;
+													p.target.position = position;
+
+													var target = p.target;
+
+													if ( target ) {
+
+														// console.log(target,particles.vertices[target]);
+														// values_size[target]
+														// values_color[target]
+
+														// hue += 0.0003 * delta;
+														// if ( hue > 1 ) hue -= 1;
+
+														// TODO Create a PointOnShape Action/Zone in the particle engine
+
+														timeOnShapePath += 0.00035 * delta;
+														if ( timeOnShapePath > 1 ) timeOnShapePath -= 1;
+
+														pointOnShape = circleShape.getPointAt( timeOnShapePath ) || pointOnShape;
+
+														emitterpos.x = pointOnShape.x * 5 - 100;
+														emitterpos.y = -pointOnShape.y * 5 + 400;
+
+														// pointLight.position.copy( emitterpos );
+														pointLight.position.x = emitterpos.x;
+														pointLight.position.y = emitterpos.y;
+														pointLight.position.z = 100;
+
+														particles.vertices[ target ] = p.position;
+
+														values_color[ target ].setHSL( hue, 0.6, 0.1 );
+
+														pointLight.color.setHSL( hue, 0.8, 0.5 );
+
+
+													};
+
+												};
+
+												var onParticleDead = function( particle ) {
+
+													var target = particle.target;
+
+													if ( target ) {
+
+														// Hide the particle
+
+														values_color[ target ].setRGB( 0, 0, 0 );
+														particles.vertices[ target ].set( Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY );
+
+														// Mark particle system as available by returning to pool
+
+														Pool.add( particle.target );
+
+													}
+
+												};
+
+												var engineLoopUpdate = function() {
+
+												};
+
+
+												sparksEmitter = new SPARKS.Emitter( new SPARKS.SteadyCounter( 500 ) );
+
+												emitterpos = new THREE.Vector3( 0, 0, 0 );
+
+												sparksEmitter.addInitializer( new SPARKS.Position( new SPARKS.PointZone( emitterpos ) ) );
+												sparksEmitter.addInitializer( new SPARKS.Lifetime( 1, 15 ));
+												sparksEmitter.addInitializer( new SPARKS.Target( null, setTargetParticle ) );
+
+
+												sparksEmitter.addInitializer( new SPARKS.Velocity( new SPARKS.PointZone( new THREE.Vector3( 0, -5, 1 ) ) ) );
+
+												sparksEmitter.addAction( new SPARKS.Age() );
+												sparksEmitter.addAction( new SPARKS.Accelerate( 0, 0, -50 ) );
+												sparksEmitter.addAction( new SPARKS.Move() );
+												sparksEmitter.addAction( new SPARKS.RandomDrift( 90, 100, 2000 ) );
+
+
+												sparksEmitter.addCallback( "created", onParticleCreated );
+												sparksEmitter.addCallback( "dead", onParticleDead );
+												sparksEmitter.start();
+
+												// End Particles
+
+
+
+
+
+
+
+
+
+				// ---------------------------------------------------------------
+
+
+				// postprocessing
+
+				// composer = new THREE.EffectComposer( renderer );
+				// composer.addPass( new THREE.RenderPass( scene, camera ) );
+
+				// var effectDotScreen = new THREE.DotScreenPass( new THREE.Vector2( 0, 0 ), 0.5, 0.8 );
+				// composer.addPass( effectDotScreen );
+
+				// var effectSepia = new THREE.ShaderPass( THREE.SepiaShader );
+				// effectSepia.uniforms[ 'amount' ].value = 4;
+				// effectSepia.renderToScreen = true;
+				// composer.addPass( effectSepia );
+
+
+				container.appendChild( renderer.domElement );
+
+				window.addEventListener( 'resize', resize, false );
+
+			}
+
+
+			// Tween.js
+			// http://sole.github.com/tween.js/examples/03_graphs.html
+			// http://learningthreejs.com/data/tweenjs_for_smooth_animation/tweenjs_for_smooth_animation.html
+			// http://learningthreejs.com/blog/2011/08/17/tweenjs-for-smooth-animation/
+
+
+			function setupTween() {
+				var update  = function(){
+					mesh.rotation.x = current.x;
+					mesh.rotation.y = current.y;
+				}
+
+				var current = { x: 0.1, y: 0.2 };
+
+				var target1 = { x: 0.1, y: -0.2 };
+				var target2 = { x: -0.2, y: -0.2 };
+				var target3 = { x: -0.2, y: 0.2 };
+				var target4 = { x: 0.1, y: 0.2 }; // same as start
+
+				var tween1 = new TWEEN.Tween(current)
+					.to(target1, 800)
+					.easing(TWEEN.Easing.Cubic.InOut)
+					.delay(800)
+					.onUpdate(update);
+
+				var tween2 = new TWEEN.Tween(current)
+					.to(target2, 800)
+					.easing(TWEEN.Easing.Cubic.InOut)
+					.delay(800)
+					.onUpdate(update);
+
+				var tween3 = new TWEEN.Tween(current)
+					.to(target3, 800)
+					.easing(TWEEN.Easing.Cubic.InOut)
+					.delay(800)
+					.onUpdate(update);
+
+				var tween4 = new TWEEN.Tween(current)
+					.to(target4, 800)
+					.easing(TWEEN.Easing.Cubic.InOut)
+					.delay(800)
+					.onUpdate(update);
+
+				tween1.chain(tween2);
+				tween2.chain(tween3);
+				tween3.chain(tween4);
+				tween4.chain(tween1);
+
+				tween1.start();
+
+				// Morph Targets
+
+				var influence = { i: 0 };
+
+				var morphTween = new TWEEN.Tween(influence)
+					.to({ i: 1 }, 800)
+					.easing(TWEEN.Easing.Cubic.InOut)
+					.delay(800)
+					.repeat( Infinity )
+					.yoyo( true )
+					.onUpdate(function(){
+						mesh.morphTargetInfluences[0] = influence.i;
+					});
+
+				morphTween.start();
+			}
+
+
+			function resize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			//
+
+			function animate() {
+				requestAnimationFrame( animate );
+				render();
+				TWEEN.update();
+				controls.update();
+			}
+
+			function render() {
+
+				delta = speed * clock.getDelta();
+				particleCloud.geometry.verticesNeedUpdate = true;
+				attributes.size.needsUpdate = true;
+				attributes.pcolor.needsUpdate = true;
+
+				if (mesh) mesh.position.y = 10 * Math.sin( clock.getElapsedTime() * 2 );
+
+				// if (mesh) mesh.morphTargetInfluences[0] = Math.max( 0, Math.sin( clock.getElapsedTime() ) );
+				// if (mesh) mesh.morphTargetInfluences[1] = Math.max( 0, Math.sin( clock.getElapsedTime() * 2 ) );
+
+				renderer.render( scene, camera );
+				// composer.render();
+
+			}
+
+
+		</script>
+
+
+
+	</body>
+</html>
